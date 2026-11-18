@@ -1,0 +1,20 @@
+{
+  "id": "mounts",
+  "version": "1.0.0",
+  "name": "Dev Container Mounts",
+  "description": "Share the host's .copilot and .azure directories with the remote user's home.",
+  "documentationURL": "https://github.com/shigeyf/devcontainer-mounts",
+  "onCreateCommand": "/usr/local/share/devcontainer-mounts/link-mounts.sh",
+  "mounts": [
+    {
+      "type": "bind",
+      "source": "${localEnv:HOME}${localEnv:USERPROFILE}/.copilot",
+      "target": "/mnt/mounts/.copilot"
+    },
+    {
+      "type": "bind",
+      "source": "${localEnv:HOME}${localEnv:USERPROFILE}/.azure",
+      "target": "/mnt/mounts/.azure"
+    }
+  ]
+}
