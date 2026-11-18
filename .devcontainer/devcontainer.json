@@ -1,0 +1,70 @@
+{
+  "name": "Project Workspace",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
+
+  "privileged": true,
+
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "installOhMyZsh": true,
+      "upgradePackages": true
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "os-provided"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest"
+    },
+    "ghcr.io/devcontainers-extra/features/actionlint:1": {
+      "version": "1.7.12"
+    },
+    "ghcr.io/devcontainers-extra/features/shellcheck:1": {
+      "version": "0.11.0"
+    },
+    "ghcr.io/devcontainers-extra/features/act:1": {
+      "version": "0.2.92"
+    },
+    "ghcr.io/devcontainers-extra/features/uv:1": {
+      "version": "latest"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      // "extensions" for this project are specified in here will be installed in Dev Container.
+      "extensions": [
+        "bierner.markdown-mermaid",
+        "charliermarsh.ruff",
+        "DavidAnson.vscode-markdownlint",
+        "esbenp.prettier-vscode",
+        "GitHub.vscode-github-actions",
+        "humao.rest-client",
+        "ms-azuretools.vscode-azure-github-copilot",
+        "ms-azuretools.vscode-azure-mcp-server",
+        "ms-python.python",
+        "ms-python.vscode-python-envs",
+        "ms-python.pylance",
+        "redhat.vscode-yaml",
+        "tamasfe.even-better-toml"
+      ],
+      // DevContainer automatically inherits the workspace settings.json.
+      "settings": {
+        "python-envs.terminal.autoActivationType": "command",
+        "terminal.integrated.shellIntegration.enabled": true
+      }
+    }
+  },
+
+  "postCreateCommand": "bash .devcontainer/scripts/post-create.sh",
+
+  "remoteUser": "vscode",
+  "mounts": []
+}

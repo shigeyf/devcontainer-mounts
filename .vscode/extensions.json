@@ -1,0 +1,17 @@
+{
+  "recommendations": [
+    "bierner.markdown-mermaid",
+    "charliermarsh.ruff",
+    "DavidAnson.vscode-markdownlint",
+    "esbenp.prettier-vscode",
+    "GitHub.vscode-github-actions",
+    "humao.rest-client",
+    "ms-azuretools.vscode-azure-github-copilot",
+    "ms-azuretools.vscode-azure-mcp-server",
+    "ms-python.python",
+    "ms-python.vscode-python-envs",
+    "ms-python.pylance",
+    "redhat.vscode-yaml",
+    "tamasfe.even-better-toml"
+  ]
+}
