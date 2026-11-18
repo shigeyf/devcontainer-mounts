@@ -42,9 +42,18 @@ for target in "$mount_root"/* "$mount_root"/.[!.]* "$mount_root"/..?*; do
     continue
   fi
   if [ -e "$link" ] || [ -L "$link" ]; then
-    fail "Refusing to replace existing path: $link"
+    backup="$link.devcontainer-mounts-backup"
+    if [ -e "$backup" ] || [ -L "$backup" ]; then
+      fail "Refusing to replace existing backup: $backup"
+    fi
+    mv -nT -- "$link" "$backup"
+    # mv -n can succeed without moving if another process creates the backup.
+    if [ -e "$link" ] || [ -L "$link" ]; then
+      fail "Could not back up existing path: $link (backup: $backup)"
+    fi
+    printf 'WARNING: Moved existing path %s to %s.\n' "$link" "$backup" >&2
   fi
-  ln -s "$target" "$link"
+  ln -sT "$target" "$link"
   printf 'Linked %s -> %s\n' "$link" "$target"
 done
 

@@ -34,7 +34,7 @@ mount source does not exist.
 
 ### 2. Add the Feature to User Settings
 
-Publish `v1.0.0` to GitHub Releases first. The following URL becomes available
+Publish `v1.0.1` to GitHub Releases first. The following URL becomes available
 only after that release is published.
 
 For Windows + WSL, add this to the active profile's User Settings in the Windows
@@ -44,7 +44,7 @@ project settings.
 ```json
 {
   "dev.containers.defaultFeatures": {
-    "https://github.com/shigeyf/devcontainer-mounts/releases/download/v1.0.0/devcontainer-feature-mounts.tgz": {}
+    "https://github.com/shigeyf/devcontainer-mounts/releases/download/v1.0.1/devcontainer-feature-mounts.tgz": {}
   }
 }
 ```
@@ -85,9 +85,11 @@ No home directory such as `/home/vscode` or `/root` is hardcoded, so custom user
 and home directories are supported.
 
 No JSON parser such as jq is needed inside the container, but the util-linux
-`mountpoint` command is required. Feature `onCreateCommand` hooks run before the
-project's own `onCreateCommand`. Home symlinks are not yet available to other
-Features' installation scripts during the image build.
+`mountpoint` command and support for `mv -nT` and `ln -sT` (provided by GNU
+coreutils) are required. These options prevent overwriting backups and creating
+links inside an unexpectedly recreated directory. Feature `onCreateCommand`
+hooks run before the project's own `onCreateCommand`. Home symlinks are not yet
+available to other Features' installation scripts during the image build.
 
 To inspect the mounts and home links, run inside the container:
 
@@ -103,8 +105,19 @@ mountpoint /mnt/mounts/.azure
 - Both directories are read/write. Container processes can modify host
   credentials, history, and settings. Use this Feature only with trusted projects.
 - If a home path already contains `.copilot`, `.azure`, or a conflicting symlink,
-  the helper fails explicitly instead of overwriting it. Do not delete
-  authentication data without reviewing it.
+  the helper moves it to the same path with `.devcontainer-mounts-backup`
+  appended, logs a warning, and creates the host-facing symlink. For example,
+  an existing `~/.azure` becomes `~/.azure.devcontainer-mounts-backup`.
+  Existing data is not deleted or merged into the host. If that backup path
+  already exists, the helper stops with an error without replacing either path.
+  Rerunning the hook leaves correct symlinks and their backups unchanged.
+- Azure CLI Features can create `.azure` during the image build, for example
+  when installing CLI extensions. Those container-local extensions and settings
+  remain in the backup and are no longer active through `~/.azure`; after
+  linking, the host's directory is used. Backups remain inside the container
+  and are not preserved when that container is deleted or rebuilt. Copy out
+  anything you need before rebuilding, and do not delete authentication data
+  without reviewing it.
 - Host ownership and permissions are not changed. Files newly created by a root
   container may be owned by root on the host.
 - Sharing directories does not guarantee shared authentication. Behavior depends
@@ -132,8 +145,10 @@ Tests use temporary dummy data only; they do not read your actual `~/.copilot`
 or `~/.azure` directories. They verify the release archive's contents and
 executable permissions, checksums, and home links and read/write access for
 three users. They also cover installation without build-time mounts, repeated
-hook execution, filtering out non-mounts, and preserving existing directories
-and conflicting symlinks.
+hook execution, filtering out non-mounts, backing up existing directories,
+files, and conflicting symlinks, and refusing to overwrite existing backups.
+The directory fixtures include build-time Azure CLI extension data and an empty
+Copilot directory; container-local data must not be copied into the host mounts.
 
 An additional test modifies only temporary metadata to add a folder containing a
 space, then verifies it for all three users without changing either script.
@@ -170,7 +185,7 @@ Do not commit generated files or credentials.
    attaches the tarball and checksum to a release.
 5. Once the assets have been uploaded, the workflow publishes the draft release.
 
-The initial version is `1.0.0`, with tag `v1.0.0`. You do not need to push a tag
+The Feature version is `1.0.1`, with tag `v1.0.1`. You do not need to push a tag
 before running the workflow; the workflow creates it. The release job is skipped
 when run against a branch other than the default branch.
 

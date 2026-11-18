@@ -31,7 +31,7 @@ mkdir -p -m 700 "$HOME/.copilot" "$HOME/.azure"
 
 ### 2. User Settings に追加
 
-最初に GitHub Releases で `v1.0.0` を公開してください。以下の URL はその Release 公開後に利用できます。
+最初に GitHub Releases で `v1.0.1` を公開してください。以下の URL はその Release 公開後に利用できます。
 
 Windows + WSL の構成では、Windows 側 VS Code の利用中の Profile の User Settings に追加します。
 コンテナーの Remote Settings や、共有するプロジェクト設定には追加しません。
@@ -39,7 +39,7 @@ Windows + WSL の構成では、Windows 側 VS Code の利用中の Profile の 
 ```json
 {
   "dev.containers.defaultFeatures": {
-    "https://github.com/shigeyf/devcontainer-mounts/releases/download/v1.0.0/devcontainer-feature-mounts.tgz": {}
+    "https://github.com/shigeyf/devcontainer-mounts/releases/download/v1.0.1/devcontainer-feature-mounts.tgz": {}
   }
 }
 ```
@@ -71,7 +71,9 @@ User Settings からこの Feature の項目を削除して、標準 Rebuild を
 `/mnt/mounts` 直下の実際にマウントされたフォルダーだけを確認し、`$HOME` に同名の symlink を作ります。
 通常のディレクトリー・ファイル・symlink は対象にしません。マウントがない場合は、その旨をログに出して終了します。
 `/home/vscode` や `/root` を固定しないため、別名ユーザーや独自ホームにも対応します。
-コンテナー内に jq 等の JSON 解析ツールは不要ですが、util-linux の `mountpoint` が必要です。
+コンテナー内に jq 等の JSON 解析ツールは不要ですが、util-linux の `mountpoint` と、
+GNU coreutils が提供する `mv -nT`・`ln -sT` オプションへの対応が必要です。
+これらのオプションでバックアップの上書きや、再作成されたディレクトリー内へのリンクの誤作成を防ぎます。
 Feature の `onCreateCommand` はプロジェクト自身の `onCreateCommand` より前に実行されます。
 ビルド中の他の Feature のインストール処理からは、ホームの symlink はまだ利用できません。
 
@@ -87,7 +89,8 @@ mountpoint /mnt/mounts/.azure
 ## 注意事項
 
 - 両フォルダーは読み書き可能です。コンテナー内のプロセスはホストの認証情報・履歴・設定を変更できます。信頼するプロジェクトだけで使用してください。
-- ホームに既存の `.copilot` / `.azure`、または別の symlink がある場合、上書きせず明示エラーにします。認証データを安易に削除しないでください。
+- ホームに既存の `.copilot` / `.azure`、または別の symlink がある場合、同じパスに `.devcontainer-mounts-backup` を付けた名前へ移動し、警告を出してからホスト側への symlink を作ります。例えば、既存の `~/.azure` は `~/.azure.devcontainer-mounts-backup` へ退避します。既存データの削除やホストへの自動マージは行いません。バックアップ先が既に存在する場合は、どちらも置換せず明示エラーにします。再実行時は、正しい symlink とバックアップをそのまま保持します。
+- Azure CLI Feature は、CLI 拡張機能のインストール時など、イメージのビルド中に `.azure` を作成することがあります。コンテナー側だけの拡張機能や設定は退避先に残り、通常の `~/.azure` からは参照されなくなります。リンク作成後はホスト側のディレクトリーを使用します。バックアップはコンテナー内にあるため、コンテナーの削除・再構築では保持されません。必要なデータは再構築前に外部へ保存し、認証データを安易に削除しないでください。
 - ホストの所有者・権限を変更しません。root コンテナーが新規作成するファイルは root 所有になる場合があります。
 - ディレクトリー共有はログインの引き継ぎを保証しません。OS の keychain、認証方式、アプリケーションのバージョンに依存します。
 - 履歴や DB を複数プロセスで共有する際の排他制御は、それぞれのアプリケーションに依存します。
@@ -106,7 +109,10 @@ bash tests/test.sh
 
 テストは一時領域のダミーデータのみを使い、実際の `~/.copilot` / `~/.azure` は読みません。
 配布用 tarball の内容と実行権限、チェックサム、３ユーザーのホーム接続・読み書き、
-ビルド時にマウントが不要であること、作成後フックの再実行、マウント以外の除外、既存ディレクトリーと競合 symlink の保護を確認します。
+ビルド時にマウントが不要であること、作成後フックの再実行、マウント以外の除外、
+既存ディレクトリー・ファイル・競合 symlink の退避と、既存バックアップの上書き拒否を確認します。
+ビルド時の Azure CLI 拡張機能のダミーデータと空の Copilot ディレクトリーを退避し、
+コンテナー側のデータがホストのマウントへコピーされないことも確認します。
 さらに、一時的な metadata に空白を含むフォルダーを追加し、スクリプトを変更せず３ユーザーで利用できることを確認します。
 実際のマウント元はすべてダミーの一時フォルダーに置き換えます。
 コンテナーは終了時に削除され、一時ファイルも片付けます。
@@ -139,7 +145,7 @@ tarball のルートには、metadata、実行可能な `install.sh` と `link-m
 4. テスト成功後、Feature の `version` からタグを作成し、tarball とチェックサムを Release に添付します。
 5. アセットのアップロードが完了してから、draft を公開状態に切り替えます。
 
-最初のバージョンは `1.0.0`、タグは `v1.0.0` です。
+Feature のバージョンは `1.0.1`、タグは `v1.0.1` です。
 手動で先にタグを push する必要はありません。公開ワークフローがタグを作成します。
 デフォルトブランチ以外で実行した場合、公開ジョブはスキップされます。
 

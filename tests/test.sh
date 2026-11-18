@@ -182,11 +182,27 @@ printf 'PASS: %s home links and bind-mount read/write\n' "$1"
 CHECK
 chmod +x /tmp/check-mounts.sh
 
+su -s /bin/sh vscode -c '
+  mkdir -p "$HOME/.azure/cliextensions/account" "$HOME/.copilot"
+  printf "%s\n" "container-extension" > "$HOME/.azure/cliextensions/account/feature-marker.txt"
+'
 su -s /bin/sh vscode -c 'exec "$FEATURE_HOOK"'
 su -s /bin/sh vscode -c '/tmp/check-mounts.sh vscode /home/vscode'
+azure_backup=/home/vscode/.azure.devcontainer-mounts-backup
+copilot_backup=/home/vscode/.copilot.devcontainer-mounts-backup
+grep -Fxq 'container-extension' "$azure_backup/cliextensions/account/feature-marker.txt" \
+  || fail 'The existing Azure CLI extension data was not backed up.'
+test ! -e /mnt/mounts/.azure/cliextensions \
+  || fail 'Container-local Azure CLI extensions were copied to the host.'
+test -d "$copilot_backup" && test ! -L "$copilot_backup" \
+  || fail 'The existing empty Copilot directory was not backed up.'
 su -s /bin/sh vscode -c 'exec "$FEATURE_HOOK"'
 su -s /bin/sh vscode -c '/tmp/check-mounts.sh vscode /home/vscode'
-printf 'PASS: repeated hook and non-mount filtering\n'
+grep -Fxq 'container-extension' "$azure_backup/cliextensions/account/feature-marker.txt" \
+  || fail 'The repeated hook changed the Azure CLI backup.'
+test ! -e "$azure_backup.devcontainer-mounts-backup" \
+  || fail 'The repeated hook created another backup.'
+printf 'PASS: Azure CLI data and empty directory backed up, repeated hook, and non-mount filtering\n'
 
 HOME=/root "$FEATURE_HOOK"
 HOME=/root /tmp/check-mounts.sh root /root
@@ -200,25 +216,52 @@ su -s /bin/sh pocuser -c 'exec "$FEATURE_HOOK"'
 su -s /bin/sh pocuser -c '/tmp/check-mounts.sh pocuser /srv/poc-home'
 
 first_name="${first_target##*/}"
-mkdir -p "/tmp/conflict-home/$first_name"
-printf '%s\n' 'keep-me' > "/tmp/conflict-home/$first_name/keep.txt"
-if HOME=/tmp/conflict-home "$FEATURE_HOOK" >/tmp/install-error 2>&1; then
-  fail 'The runtime hook replaced an existing directory.'
-fi
-expect_error 'Refusing to replace existing path'
-grep -Fxq 'keep-me' "/tmp/conflict-home/$first_name/keep.txt" \
-  || fail 'The existing directory contents were changed.'
-printf 'PASS: existing directory preserved\n'
+mkdir -p /tmp/file-home
+printf '%s\n' 'keep-me' > "/tmp/file-home/$first_name"
+HOME=/tmp/file-home "$FEATURE_HOOK"
+test "$(readlink "/tmp/file-home/$first_name")" = "$first_target" \
+  || fail 'The existing file was not replaced with the expected link.'
+grep -Fxq 'keep-me' "/tmp/file-home/$first_name.devcontainer-mounts-backup" \
+  || fail 'The existing file was not backed up.'
+printf 'PASS: existing file backed up\n'
 
 mkdir -p /tmp/symlink-home
 ln -s /tmp/missing-target "/tmp/symlink-home/$first_name"
-if HOME=/tmp/symlink-home "$FEATURE_HOOK" >/tmp/install-error 2>&1; then
-  fail 'The runtime hook replaced a conflicting symlink.'
-fi
-expect_error 'Refusing to replace existing path'
-test "$(readlink "/tmp/symlink-home/$first_name")" = /tmp/missing-target \
-  || fail 'The conflicting symlink was changed.'
-printf 'PASS: conflicting symlink preserved\n'
+HOME=/tmp/symlink-home "$FEATURE_HOOK"
+test "$(readlink "/tmp/symlink-home/$first_name")" = "$first_target" \
+  || fail 'The conflicting symlink was not replaced with the expected link.'
+test "$(readlink "/tmp/symlink-home/$first_name.devcontainer-mounts-backup")" = /tmp/missing-target \
+  || fail 'The conflicting symlink was not backed up.'
+printf 'PASS: conflicting dangling symlink backed up\n'
+
+for backup_type in directory file symlink; do
+  conflict_home="/tmp/conflict-$backup_type-home"
+  mkdir -p "$conflict_home/$first_name"
+  printf '%s\n' 'keep-original' > "$conflict_home/$first_name/keep.txt"
+  backup="$conflict_home/$first_name.devcontainer-mounts-backup"
+  case "$backup_type" in
+    directory)
+      mkdir "$backup"
+      printf '%s\n' 'keep-backup' > "$backup/keep.txt"
+      ;;
+    file) printf '%s\n' 'keep-backup' > "$backup" ;;
+    symlink) ln -s /tmp/missing-backup-target "$backup" ;;
+  esac
+  if HOME="$conflict_home" "$FEATURE_HOOK" >/tmp/install-error 2>&1; then
+    fail "The runtime hook accepted an existing $backup_type backup."
+  fi
+  expect_error "Refusing to replace existing backup: $backup"
+  test ! -L "$conflict_home/$first_name" \
+    || fail 'The original directory was replaced despite a backup conflict.'
+  grep -Fxq 'keep-original' "$conflict_home/$first_name/keep.txt" \
+    || fail 'The original directory contents were changed.'
+  case "$backup_type" in
+    directory) grep -Fxq 'keep-backup' "$backup/keep.txt" ;;
+    file) grep -Fxq 'keep-backup' "$backup" ;;
+    symlink) test "$(readlink "$backup")" = /tmp/missing-backup-target ;;
+  esac || fail "The existing $backup_type backup was changed."
+done
+printf 'PASS: existing directory, file, and dangling symlink backups preserved\n'
 CONTAINER
 
 for directory in "${fixture_dirs[@]}"; do
